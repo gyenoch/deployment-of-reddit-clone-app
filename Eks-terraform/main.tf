@@ -25,6 +25,7 @@ resource "aws_iam_role_policy_attachment" "example-AmazonEKSClusterPolicy" {
 data "aws_vpc" "default" {
   default = true
 }
+
 #get public subnets for cluster
 data "aws_subnets" "public" {
   filter {
@@ -32,17 +33,29 @@ data "aws_subnets" "public" {
     values = [data.aws_vpc.default.id]
   }
 }
-#cluster provision
+
+#get specific subnets to avoid unsupported AZs
+data "aws_subnet" "public_a" {
+  id = data.aws_subnets.public.ids[0]
+}
+
+data "aws_subnet" "public_b" {
+  id = data.aws_subnets.public.ids[1]
+}
+
 resource "aws_eks_cluster" "example" {
   name     = "EKS_CLOUD"
   role_arn = aws_iam_role.example.arn
 
   vpc_config {
-    subnet_ids = data.aws_subnets.public.ids
+    # Select subnets in specific Availability Zones to avoid the unsupported AZ (us-east-1e)
+    subnet_ids = [
+      data.aws_subnet.public_a.id, # e.g., us-east-1a
+      data.aws_subnet.public_b.id  # e.g., us-east-1b
+    ]
   }
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Cluster handling.
-  # Otherwise, EKS will not be able to properly delete EKS managed EC2 infrastructure such as Security Groups.
   depends_on = [
     aws_iam_role_policy_attachment.example-AmazonEKSClusterPolicy,
   ]
@@ -83,7 +96,10 @@ resource "aws_eks_node_group" "example" {
   cluster_name    = aws_eks_cluster.example.name
   node_group_name = "Node-cloud"
   node_role_arn   = aws_iam_role.example1.arn
-  subnet_ids      = data.aws_subnets.public.ids
+  subnet_ids = [
+    data.aws_subnet.public_a.id, # Use the same subnets for worker nodes
+    data.aws_subnet.public_b.id
+  ]
 
   scaling_config {
     desired_size = 1
@@ -93,7 +109,6 @@ resource "aws_eks_node_group" "example" {
   instance_types = ["t2.medium"]
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Node Group handling.
-  # Otherwise, EKS will not be able to properly delete EC2 Instances and Elastic Network Interfaces.
   depends_on = [
     aws_iam_role_policy_attachment.example-AmazonEKSWorkerNodePolicy,
     aws_iam_role_policy_attachment.example-AmazonEKS_CNI_Policy,
