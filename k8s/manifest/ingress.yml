@@ -8,7 +8,7 @@ spec:
     http:
       paths:
       - pathType: Prefix
-        path: "/"
+        path: "/test"
         backend:
           service:
             name: reddit-clone-service
