@@ -8,19 +8,40 @@ spec:
     http:
       paths:
       - pathType: Prefix
-        path: "/test"
+        path: "/"
         backend:
           service:
             name: reddit-clone-service
             port:
               number: 3000
-  - host: reddit-clone.chickenkiller.com
-    http:
-      paths:
-      - pathType: Prefix
-        path: "/test"
-        backend:
-          service:
-            name: reddit-clone-service
-            port:
-              number: 3000
+
+
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: ingress-reddit-app
+#   annotations:
+#     nginx.ingress.kubernetes.io/rewrite-target: /
+#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+# spec:
+#   tls:
+#   - hosts:
+#     - reddit-clone.chickenkiller.com
+#     secretName: reddit-clone-tls
+#   rules:
+#   - host: reddit-clone.chickenkiller.com
+#     http:
+#       paths:
+#       - pathType: Prefix
+#         path: "/"
+#         backend:
+#           service:
+#             name: reddit-clone-service
+#             port:
+#               number: 3000
+#   defaultBackend:
+#     service:
+#       name: default-backend
+#       port:
+#         number: 80
+

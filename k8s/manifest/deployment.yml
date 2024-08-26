@@ -24,7 +24,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: reddit-clone-svc
+  name: reddit-clone-service
 spec:
   selector:
     app: reddit-clone
@@ -32,4 +32,4 @@ spec:
     - protocol: "TCP"
       port: 80
       targetPort: 3000 
-  type: LoadBalancer
+  type: ClusterIP
