@@ -1,0 +1,98 @@
+properties([
+    parameters([
+        string(
+            defaultValue: 'dev',
+            name: 'Environment'
+        ),
+        choice(
+            choices: ['plan', 'apply', 'destroy'], 
+            name: 'Terraform_Action'
+        )
+    ])
+])
+
+pipeline {
+    agent any
+    stages {
+        stage('Preparing') {
+            steps {
+                sh 'echo Preparing'
+            }
+        }
+        stage('Git Pulling') {
+            steps {
+                git branch: 'main', url: 'https://github.com/gyenoch/deployment-of-reddit-clone-app.git'
+            }
+        }
+        stage('Init') {
+            steps {
+                withAWS(credentials: 'aws_cred', region: 'us-east-1') {
+                    sh 'terraform -chdir=Eks-terraform/ init'
+                }
+            }
+        }
+        stage('Validate') {
+            steps {
+                withAWS(credentials: 'aws_cred', region: 'us-east-1') {
+                    sh 'terraform -chdir=Eks-terraform/ validate'
+                }
+            }
+        }
+        stage('Action') {
+            steps {
+                withAWS(credentials: 'aws_cred', region: 'us-east-1') {
+                    script {    
+                        if (params.Terraform_Action == 'plan') {
+                            sh "terraform -chdir=Eks-terraform/ plan -var-file=${params.Environment}.tfvars"
+                        } else if (params.Terraform_Action == 'apply') {
+                            sh "terraform -chdir=Eks-terraform/ apply -var-file=${params.Environment}.tfvars -auto-approve"
+                            sh "sleep 10"
+                            sh "aws eks update-kubeconfig --name EKS_CLOUD --region us-east-1"
+                            sh "kubectl create namespace argocd"
+                            sh "kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
+                            sh "sleep 5"
+                            sh "kubectl patch svc argocd-server -n argocd -p '{\"spec\": {\"type\": \"LoadBalancer\"}}'"
+                        } else if (params.Terraform_Action == 'destroy') {
+                            sh "terraform -chdir=Eks-terraform/ destroy -var-file=${params.Environment}.tfvars -auto-approve"
+                        } else {
+                            error "Invalid value for Terraform_Action: ${params.Terraform_Action}"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                def jobName = env.JOB_NAME 
+                def buildNumber = env.BUILD_NUMBER 
+                def pipelineStatus = currentBuild.result ?: 'UNKNOWN' 
+                def bannerColor = pipelineStatus.toUpperCase() == 'SUCCESS' ? 'green' : 'red'
+
+                def body = """
+                    <html> <body>
+                    <div style="border: 4px solid ${bannerColor}; padding: 10px;">
+                    <h2>${jobName} - Build ${buildNumber}</h2>
+                    <div style="background-color: ${bannerColor}; padding: 10px;">
+                    <h3 style="color: white;">Pipeline Status: 
+                    ${pipelineStatus.toUpperCase()}</h3>
+                    </div>
+                    <p>Check the <a href="${BUILD_URL}">console output</a>.</p>
+                    </div>
+                    </body> </html> """
+
+                emailext ( 
+                    subject: "${jobName} - Build ${buildNumber} - ${pipelineStatus.toUpperCase()}", 
+                    body: body, 
+                    to: 'www.gyenoch@gmail.com', 
+                    from: 'jenkins@example.com', 
+                    replyTo: 'www.gyenoch@gmail.com', 
+                    mimeType: 'text/html', 
+                    attachmentsPattern: 'trivy-image-report.html' 
+                )
+            }
+        }
+    }
+}
