@@ -44,7 +44,7 @@ data "aws_subnet" "public_b" {
 }
 
 resource "aws_eks_cluster" "example" {
-  name     = "EKS_CLOUD"
+  name     = var.eks_name
   role_arn = aws_iam_role.example.arn
 
   vpc_config {
@@ -62,7 +62,7 @@ resource "aws_eks_cluster" "example" {
 }
 
 resource "aws_iam_role" "example1" {
-  name = "eks-node-group-cloud"
+  name = var.node_group_name
 
   assume_role_policy = jsonencode({
     Statement = [{
